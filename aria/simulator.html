@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARIA Hardware Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f; --surface: #13131a; --surface2: #1a1a24;
+    --border: #2a2a3a; --accent: #00d4ff; --success: #00ff88;
+    --warn: #ffd700; --err: #ff4466; --text: #e0e0f0; --muted: #6060a0;
+    --font: 'Space Grotesk', sans-serif; --mono: 'Space Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font);
+         display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .logo { font-weight: 700; font-size: 1.1rem; letter-spacing: 0.15em; color: var(--accent); }
+  .logo span { color: var(--text); opacity: 0.6; font-weight: 400; font-size: 0.8rem; margin-left: 10px; }
+  .ws-badge {
+    display: flex; align-items: center; gap: 8px; font-family: var(--mono);
+    font-size: 0.72rem; color: var(--muted);
+  }
+  .ws-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--err);
+             box-shadow: 0 0 6px var(--err); transition: all 0.4s; }
+  .ws-dot.live { background: var(--success); box-shadow: 0 0 8px var(--success); }
+  .i2c-badge { font-family: var(--mono); font-size: 0.7rem; color: var(--accent);
+               background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.25);
+               padding: 3px 10px; border-radius: 20px; }
+
+  .grid { display: grid; grid-template-columns: 320px 1fr 340px; gap: 16px;
+          padding: 16px; flex: 1; overflow: hidden; min-height: 0; }
+
+  /* ── Panel base ── */
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; display: flex; flex-direction: column; overflow: hidden;
+  }
+  .panel-title {
+    padding: 12px 16px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  /* ── LEFT: Hand SVG ── */
+  .hand-panel { align-items: center; justify-content: center; }
+  .hand-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  #handSvg {
+    width: 240px; height: 320px; overflow: visible;
+    transition: transform 0.4s cubic-bezier(0.25,0.46,0.45,0.94);
+  }
+  .palm { fill: var(--surface2); stroke: var(--border); stroke-width: 1.5; rx: 12; }
+  .finger-seg {
+    fill: var(--surface2); stroke: var(--muted); stroke-width: 1.2;
+    transition: fill 0.4s, stroke 0.4s, transform 0.4s cubic-bezier(0.25,0.46,0.45,0.94);
+    transform-box: fill-box; transform-origin: top center;
+  }
+  .finger-seg.active { fill: rgba(0,212,255,0.18); stroke: var(--accent); }
+  .wrist-group { transition: transform 0.4s cubic-bezier(0.25,0.46,0.45,0.94); }
+
+  /* ── CENTER: Servo Dashboard ── */
+  .dashboard { overflow-y: auto; }
+  .servo-cards { display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow-y: auto; flex: 1; }
+  .servo-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px;
+  }
+  .servo-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .servo-name { font-weight: 600; font-size: 0.9rem; text-transform: capitalize; }
+  .servo-ch { font-family: var(--mono); font-size: 0.65rem; color: var(--muted);
+               background: var(--border); padding: 2px 7px; border-radius: 10px; }
+  .servo-values { display: flex; justify-content: space-between; font-family: var(--mono);
+                  font-size: 0.72rem; color: var(--muted); margin-bottom: 6px; }
+  .servo-pulse { color: var(--accent); }
+  .servo-pct { color: var(--success); }
+  .bar-track { background: var(--border); border-radius: 4px; height: 6px; overflow: hidden; margin-bottom: 8px; }
+  .bar-fill {
+    height: 100%; border-radius: 4px; width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--success));
+    transition: width 0.4s cubic-bezier(0.25,0.46,0.45,0.94);
+    box-shadow: 0 0 8px rgba(0,212,255,0.4);
+  }
+  .sparkline { width: 100%; height: 28px; }
+  .spark-path { fill: none; stroke: var(--accent); stroke-width: 1.5; opacity: 0.6; }
+
+  /* ── RIGHT: Log ── */
+  .log-panel { }
+  .log-body { flex: 1; overflow-y: auto; padding: 10px 0; font-family: var(--mono); font-size: 0.7rem; }
+  .log-entry { display: flex; gap: 8px; padding: 3px 14px; line-height: 1.5; }
+  .log-time { color: var(--muted); flex-shrink: 0; }
+  .log-level { font-weight: 700; flex-shrink: 0; width: 38px; text-align: right; }
+  .log-msg { word-break: break-word; opacity: 0.9; }
+  .log-level.USER { color: var(--text); }
+  .log-level.LLM  { color: var(--accent); }
+  .log-level.EXEC { color: var(--success); }
+  .log-level.SYS  { color: var(--warn); }
+  .log-level.ERR  { color: var(--err); }
+
+  /* scrollbars */
+  ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  @keyframes pulse-glow { 0%,100%{opacity:1} 50%{opacity:0.5} }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">ARIA <span>Hardware Simulator</span></div>
+  <div class="i2c-badge">PCA9685 @ 0x40 · 50Hz · sim</div>
+  <div class="ws-badge">
+    <div class="ws-dot" id="wsDot"></div>
+    <span id="wsStatus">Connecting…</span>
+  </div>
+</header>
+
+<div class="grid">
+  <!-- LEFT: Hand -->
+  <div class="panel hand-panel">
+    <div class="panel-title">🖐 Live Hand Visualization</div>
+    <div class="hand-wrap">
+      <svg id="handSvg" viewBox="0 0 200 300">
+        <g id="wristGroup">
+          <!-- Palm -->
+          <rect class="palm" x="40" y="160" width="120" height="110" rx="12"/>
+          <!-- Wrist cylinder -->
+          <rect class="palm" x="65" y="255" width="70" height="40" rx="8"/>
+
+          <!-- Fingers: each finger = 3 nested groups rotated at joint -->
+          <!-- Thumb -->
+          <g id="f-thumb-b" style="transform-origin:52px 165px">
+            <rect class="finger-seg" id="seg-thumb-0" x="40" y="133" width="24" height="32" rx="5"/>
+            <g id="f-thumb-m" style="transform-origin:52px 133px">
+              <rect class="finger-seg" id="seg-thumb-1" x="40" y="103" width="24" height="30" rx="5"/>
+              <g id="f-thumb-t" style="transform-origin:52px 103px">
+                <rect class="finger-seg" id="seg-thumb-2" x="42" y="79" width="20" height="24" rx="5"/>
+              </g>
+            </g>
+          </g>
+
+          <!-- Index -->
+          <g id="f-index-b" style="transform-origin:72px 163px">
+            <rect class="finger-seg" id="seg-index-0" x="58" y="115" width="28" height="48" rx="5"/>
+            <g id="f-index-m" style="transform-origin:72px 115px">
+              <rect class="finger-seg" id="seg-index-1" x="58" y="71" width="28" height="44" rx="5"/>
+              <g id="f-index-t" style="transform-origin:72px 71px">
+                <rect class="finger-seg" id="seg-index-2" x="60" y="35" width="24" height="36" rx="5"/>
+              </g>
+            </g>
+          </g>
+
+          <!-- Middle -->
+          <g id="f-middle-b" style="transform-origin:100px 160px">
+            <rect class="finger-seg" id="seg-middle-0" x="86" y="110" width="28" height="50" rx="5"/>
+            <g id="f-middle-m" style="transform-origin:100px 110px">
+              <rect class="finger-seg" id="seg-middle-1" x="86" y="64" width="28" height="46" rx="5"/>
+              <g id="f-middle-t" style="transform-origin:100px 64px">
+                <rect class="finger-seg" id="seg-middle-2" x="88" y="26" width="24" height="38" rx="5"/>
+              </g>
+            </g>
+          </g>
+
+          <!-- Ring -->
+          <g id="f-ring-b" style="transform-origin:128px 163px">
+            <rect class="finger-seg" id="seg-ring-0" x="114" y="115" width="28" height="48" rx="5"/>
+            <g id="f-ring-m" style="transform-origin:128px 115px">
+              <rect class="finger-seg" id="seg-ring-1" x="114" y="71" width="28" height="44" rx="5"/>
+              <g id="f-ring-t" style="transform-origin:128px 71px">
+                <rect class="finger-seg" id="seg-ring-2" x="116" y="35" width="24" height="36" rx="5"/>
+              </g>
+            </g>
+          </g>
+
+          <!-- Pinky -->
+          <g id="f-pinky-b" style="transform-origin:154px 167px">
+            <rect class="finger-seg" id="seg-pinky-0" x="142" y="125" width="24" height="42" rx="5"/>
+            <g id="f-pinky-m" style="transform-origin:154px 125px">
+              <rect class="finger-seg" id="seg-pinky-1" x="142" y="87" width="24" height="38" rx="5"/>
+              <g id="f-pinky-t" style="transform-origin:154px 87px">
+                <rect class="finger-seg" id="seg-pinky-2" x="144" y="55" width="20" height="32" rx="5"/>
+              </g>
+            </g>
+          </g>
+        </g>
+      </svg>
+    </div>
+  </div>
+
+  <!-- CENTER: Dashboard -->
+  <div class="panel dashboard">
+    <div class="panel-title">📊 Servo Dashboard</div>
+    <div class="servo-cards" id="servoCards"></div>
+  </div>
+
+  <!-- RIGHT: Log -->
+  <div class="panel log-panel">
+    <div class="panel-title">📟 Command Log</div>
+    <div class="log-body" id="logBody"></div>
+  </div>
+</div>
+
+<script>
+const FINGERS = ['thumb','index','middle','ring','pinky','wrist'];
+const PULSE_MIN = 150, PULSE_MAX = 600;
+
+// Sparkline history: 10 readings per servo
+const history = {};
+FINGERS.forEach(f => history[f] = Array(10).fill(0));
+
+// ── Build servo cards ──
+const cardsEl = document.getElementById('servoCards');
+FINGERS.forEach(f => {
+  cardsEl.innerHTML += `
+  <div class="servo-card" id="card-${f}">
+    <div class="servo-card-header">
+      <span class="servo-name">${f}</span>
+      <span class="servo-ch" id="ch-${f}">CH?</span>
+    </div>
+    <div class="servo-values">
+      <span class="servo-pulse" id="pulse-${f}">150 PWM</span>
+      <span class="servo-pct" id="pct-${f}">0% closed</span>
+    </div>
+    <div class="bar-track"><div class="bar-fill" id="bar-${f}"></div></div>
+    <svg class="sparkline" viewBox="0 0 100 28" preserveAspectRatio="none">
+      <path class="spark-path" id="spark-${f}" d=""/>
+    </svg>
+  </div>`;
+});
+
+// ── Update state from WS message ──
+function applyState(state) {
+  Object.entries(state).forEach(([name, data]) => {
+    const pct = data.percent;
+    const pulse = data.pulse;
+
+    document.getElementById(`ch-${name}`).textContent = `CH${data.channel}`;
+    document.getElementById(`pulse-${name}`).textContent = `${pulse} PWM`;
+    document.getElementById(`pct-${name}`).textContent = `${pct}% closed`;
+    document.getElementById(`bar-${name}`).style.width = pct + '%';
+
+    // Update sparkline history
+    history[name].push(pct);
+    history[name].shift();
+    updateSparkline(name);
+
+    // Animate hand SVG
+    if (name !== 'wrist') animateFinger(name, pct);
+    else animateWrist(pulse);
+  });
+}
+
+function updateSparkline(name) {
+  const vals = history[name];
+  const w = 100, h = 28, pad = 2;
+  const pts = vals.map((v, i) => {
+    const x = pad + (i / (vals.length - 1)) * (w - pad * 2);
+    const y = h - pad - (v / 100) * (h - pad * 2);
+    return `${x},${y}`;
+  });
+  document.getElementById(`spark-${name}`).setAttribute('d', `M${pts.join('L')}`);
+}
+
+function animateFinger(name, pct) {
+  const frac = pct / 100;
+  const r0 = frac * 40;   // base segment
+  const r1 = frac * 50;   // mid segment
+  const r2 = frac * 40;   // tip segment
+
+  const base = document.getElementById(`f-${name}-b`);
+  const mid  = document.getElementById(`f-${name}-m`);
+  const tip  = document.getElementById(`f-${name}-t`);
+  if (!base) return;
+
+  // Curl direction: rotate outward to "fold"
+  const dir = name === 'thumb' ? -1 : 1; 
+  base.style.transform = `rotate(${dir * r0}deg)`;
+  mid.style.transform  = `rotate(${dir * r1}deg)`;
+  tip.style.transform  = `rotate(${dir * r2}deg)`;
+
+  // Glow active segments
+  ['0','1','2'].forEach(i => {
+    const seg = document.getElementById(`seg-${name}-${i}`);
+    if (seg) seg.classList.toggle('active', pct > 20);
+  });
+}
+
+function animateWrist(pulse) {
+  const frac = (pulse - PULSE_MIN) / (PULSE_MAX - PULSE_MIN); // 0–1
+  const angle = (frac - 0.5) * 90; // -45 to +45 deg
+  document.getElementById('wristGroup').style.transform = `rotate(${angle}deg)`;
+}
+
+// ── Log panel ──
+const logEl = document.getElementById('logBody');
+const LEVEL_CLASS = {USER:'USER', LLM:'LLM', EXEC:'EXEC', SYS:'SYS', ERR:'ERR'};
+
+function appendLog(entries) {
+  entries.forEach(e => {
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    div.innerHTML = `
+      <span class="log-time">${e.time}</span>
+      <span class="log-level ${LEVEL_CLASS[e.level]||'SYS'}">${e.level}</span>
+      <span class="log-msg">${escHtml(e.msg)}</span>`;
+    logEl.appendChild(div);
+  });
+  logEl.scrollTop = logEl.scrollHeight;
+  // Trim to 300 entries
+  while (logEl.children.length > 300) logEl.removeChild(logEl.firstChild);
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── WebSocket ──
+const dot = document.getElementById('wsDot');
+const statusEl = document.getElementById('wsStatus');
+let ws, retryTimer;
+
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+
+  ws.onopen = () => {
+    dot.classList.add('live');
+    statusEl.textContent = 'Live';
+    clearInterval(retryTimer);
+    // Keep-alive pings every 20s
+    retryTimer = setInterval(() => ws.readyState === 1 && ws.send(JSON.stringify({type:'ping'})), 20000);
+  };
+
+  ws.onclose = () => {
+    dot.classList.remove('live');
+    statusEl.textContent = 'Reconnecting…';
+    clearInterval(retryTimer);
+    setTimeout(connect, 2000);
+  };
+
+  ws.onerror = () => ws.close();
+
+  ws.onmessage = e => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch { return; }
+    if (msg.type === 'state_update') {
+      applyState(msg.state);
+      appendLog(msg.log || []);
+    }
+  };
+}
+
+connect();
+</script>
+</body>
+</html>

@@ -1,24 +1,61 @@
 # ARIA: Autonomous Robotic Intelligence Arm
 
-ARIA is a Raspberry Pi 5-powered robotic hand system that uses local Machine Learning (Gemma 4 via Ollama and OpenAI Whisper) to understand and execute natural language voice commands.
+ARIA is a Raspberry Pi 5-powered robotic hand system that uses **local Machine Learning** (Gemma 4 via Ollama and OpenAI Whisper) or **cloud LLMs** (via OpenRouter) to understand and execute natural language voice commands.
 
 ## 🏗 Pipeline Architecture
 
 ```text
-    🎤 [ USB Mic ]
-          │
-          ▼
-    [ Whisper tiny ] ─── (Speech-to-Text) ──┐
-                                            │
-                                            ▼
-    [ ARIA Executor ] ◄── (Tool Calls) ── [ Gemma 4 ]
-          │                               (via Ollama)
-          ▼
-    [ PCA9685 Driver ] ─── (I2C) ───┐
-                                    │
-                                    ▼
-    [ 6x MG996R Servos ] ◄──── (PWM) ─── [ Robotic Hand ]
+  📷 [ USB Camera ]       🎤 [ USB Mic ]
+         │                      │
+         ▼                      ▼
+  [ Frame Capture ]      [ Whisper tiny ]
+         │                      │
+         └──────────┬───────────┘
+                    ▼
+          [ Gemma 4 / Gemini ]  ◄── multimodal: text + image
+           (Ollama or OpenRouter)
+                    │
+                    ▼  (Tool Calls)
+           [ ARIA Executor ]
+                    │
+                    ▼
+          [ PCA9685 Driver ] ─── I2C ───► [ 6x MG996R Servos ]
+                    │
+                    ▼
+            [ Robotic Hand ]
 ```
+
+---
+
+## ⚙️ Backend Configuration
+
+ARIA supports two LLM backends. Switch between them with an environment variable or CLI flag.
+
+### Option A: Ollama (Local, Free)
+Runs entirely on your machine. No API key needed. Best for Pi deployment.
+```bash
+# Set backend (default is ollama)
+export ARIA_BACKEND=ollama
+ollama pull gemma4:e4b
+python main.py
+```
+
+### Option B: OpenRouter (Cloud, Fast)
+Uses OpenRouter's API. Great for development or if the Pi 5 is under heavy load.
+```bash
+# Create a .env file from .env.example
+export ARIA_BACKEND=openrouter
+export OPENROUTER_API_KEY=your_key_here
+python main.py
+```
+
+Get an API key at: [https://openrouter.ai/keys](https://openrouter.ai/keys)
+
+| Model | Speed | Cost | Best For |
+|---|---|---|---|
+| google/gemma-2-27b-it | Fast | ~$0.001/cmd | High Quality |
+| google/gemini-flash-2.0 | Very fast | ~$0.0002/cmd | Low Latency |
+| anthropic/claude-3-haiku | Fast | ~$0.0004/cmd | Complex Reasoning |
 
 ---
 
@@ -47,17 +84,16 @@ ARIA is a Raspberry Pi 5-powered robotic hand system that uses local Machine Lea
 ## 🚀 Installation
 
 ### 1. Prerequisite: Local LLM
-ARIA requires [Ollama](https://ollama.com/) to be installed and running.
+ARIA requires [Ollama](https://ollama.com/) for local mode.
 ```bash
-# Pull the required model
-ollama pull gemma4:e2b
+ollama pull gemma4:e4b
 ```
 
 ### 2. System Dependencies
-On Raspberry Pi OS (Linux), you may need `portaudio` for audio capture and `ffmpeg` for Whisper:
 ```bash
 sudo apt update
-sudo apt install portaudio19-dev libffi-dev libssl-dev ffmpeg
+sudo apt install portaudio19-dev libffi-dev libssl-dev ffmpeg \
+                 libopencv-dev python3-opencv
 ```
 
 ### 3. Python Setup
@@ -65,46 +101,38 @@ sudo apt install portaudio19-dev libffi-dev libssl-dev ffmpeg
 git clone https://github.com/yourusername/aria.git
 cd aria
 pip install -r requirements.txt
+cp .env.example .env # Then edit .env with your keys
 ```
 
 ---
 
 ## 🎮 Usage
 
-### 🎤 Voice Control (Normal Mode)
-Launch ARIA and speak naturally to the hand.
 ```bash
+# Start with default settings
 python main.py
-```
 
-### ⌨️ Text-Only Mode
-Control ARIA via keyboard input (no microphone required).
-```bash
-python main.py --text
-```
+# Switch backend via CLI
+python main.py --backend openrouter
 
-### 🤖 Demo Sequence
-Run a pre-programmed showcase of gestures.
-```bash
-python main.py --demo
+# Vision mode (requires camera)
+python main.py --vision --text
 ```
 
 ### Example Commands
 - *"ARIA, give me a peace sign."*
-- *"Close your hand into a fist."*
-- *"Pinch your thumb and index finger together."*
+- *"Grab the red object in front of you."* (Requires --vision)
 - *"Wave hello to the crowd!"*
-- *"Rotate your wrist 45 degrees to the left."*
 
 ---
 
 ## 🏅 Hack Club Badge Justification
-ARIA satisfies the following technical requirements:
 - **Motors**: Controls 6 high-torque MG996R servos.
-- **I2C**: Communicates with the PCA9685 PWM driver over the I2C bus.
-- **Machine Learning**: Integrates two local ML models (Whisper for STT and Gemma 4 for natural language intent parsing).
+- **I2C**: Communicates with PCA9685 via I2C bus.
+- **Machine Learning**: Integrates local (Whisper, Gemma) and cloud LLMs.
+- **Cameras**: Multimodal vision analysis using live OpenCV frames.
 
 ---
 
 ## 🛡 License
-MIT License. Created for the ARIA project.
+MIT License.

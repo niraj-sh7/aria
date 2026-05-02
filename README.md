@@ -133,6 +133,10 @@ python main.py --vision --text
 - **Cameras**: Multimodal vision analysis using live OpenCV frames.
 
 ---
-
+## Simulator
+```bash
+python main.py --sim
+![alt text](image.png)
+```
 ## 🛡 License
 MIT License.

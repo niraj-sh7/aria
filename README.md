@@ -136,7 +136,7 @@ python main.py --vision --text
 ## Simulator
 ```bash
 python main.py --sim
-![alt text](image.png)
 ```
+![alt text](image.png)
 ## 🛡 License
 MIT License.

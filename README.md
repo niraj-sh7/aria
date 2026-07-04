@@ -126,7 +126,7 @@ python main.py --vision --text
 
 ---
 ## Simulator
-```bash
+```bash 
 python main.py --sim
 ```
 ![alt text](image.png)

@@ -1,21 +1,3 @@
-#!/usr/bin/env python3
-"""ARIA — Autonomous Robotic Intelligence Arm.
-
-Main entry point. Connects voice/text input to LLM backends (Ollama/OpenRouter).
-
-Usage
------
-    python main.py              # voice-controlled mode
-    python main.py --text       # text-only mode
-    python main.py --demo       # preset demo sequence
-    python main.py --vision     # attach camera frame to every LLM call
-    python main.py --watch      # continuous scene narration loop
-    python main.py --snap       # single snapshot + describe scene
-    python main.py --sim        # browser hardware simulator (no Pi needed)
-    python main.py --backend openrouter  # override backend
-    python main.py --verbose    # debug logging
-"""
-
 from __future__ import annotations
 
 import argparse

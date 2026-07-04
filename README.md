@@ -125,14 +125,6 @@ python main.py --vision --text
 - *"Wave hello to the crowd!"*
 
 ---
-
-## 🏅 Hack Club Badge Justification
-- **Motors**: Controls 6 high-torque MG996R servos.
-- **I2C**: Communicates with PCA9685 via I2C bus.
-- **Machine Learning**: Integrates local (Whisper, Gemma) and cloud LLMs.
-- **Cameras**: Multimodal vision analysis using live OpenCV frames.
-
----
 ## Simulator
 ```bash
 python main.py --sim
